@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Plan d’action</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+  margin: 0;
+  background-image: url("fond de page.jpeg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-position: center;
+  color: #222;
+}
+
+    header {
+      padding: 20px;
+      /*background: #C7CEEA; OPTION*/
+      /*color: #f9fafb; OPTION*/
+      color: #000;
+    }
+
+    header h1 {
+      margin: 0 0 5px;
+      font-size: 22px;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .container {
+      padding: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .add {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .add input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+    }
+
+    .add button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .add button:hover {
+      background: #1d4ed8;
+    }
+
+    .board {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .column {
+      flex: 1;
+      min-width: 260px;
+      background: #E9DCC9;
+      padding: 12px;
+      border-radius: 10px;
+    }
+
+    .column h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .column h2 span {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    .tasks {
+      min-height: 40px;
+    }
+
+    .task {
+      background: white;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      border-left: 4px solid #9ca3af;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .task small {
+      font-size: 11px;
+      color: #6b7280;
+      margin-left: 8px;
+    }
+
+    .task.todo {
+      border-left-color: #f97316;
+    }
+
+    .task.doing {
+      border-left-color: #2563eb;
+    }
+
+    .task.done {
+      border-left-color: #16a34a;
+      opacity: 0.85;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 800px) {
+      .board {
+        flex-direction: column;
+      }
+    }
+
+    header button {
+  margin-top: 15px;
+  padding: 10px 16px;
+  border-radius: 6px;
+}
+
+  </style>
+</head>
+<body>
+  <header>
+    <center>
+    <h1>Plan d’action</h1>
+    <p>Cliquer sur une étape pour la faire passer de “À faire” → “En cours” → “Terminé” → “À faire”.</p>
+    <button id="reset-data" class="ct-btn ct-btn-danger" style="margin-top:20px;">
+    Réinitialiser les données
+    </button>
+    <button onclick="window.print()">Exporter en PDF</button>
+    </center>
+  </header>
+
+  <div class="container">
+    <div class="add">
+      <input id="taskInput" placeholder="Nouvelle étape de ton plan d’action…">
+      <button id="addBtn">Ajouter</button>
+    </div>
+
+<div id="export-zone"><!--ceci est la zone a export PDF-->
+    
+    <div class="board">
+      <div class="column" data-status="todo">
+        <h2>À faire <span id="count-todo"></span></h2>
+        <div class="tasks" id="todo"></div>
+      </div>
+
+      <div class="column" data-status="doing">
+        <h2>En cours <span id="count-doing"></span></h2>
+        <div class="tasks" id="doing"></div>
+      </div>
+
+      <div class="column" data-status="done">
+        <h2>Terminé <span id="count-done"></span></h2>
+        <div class="tasks" id="done"></div>
+      </div>
+    </div>
+
+    <p class="hint">
+      Astuce : garde ce plan d’action pour un seul objectif important, et avance étape par étape.
+    </p>
+  </div>
+
+  <script>
+// Récupère les tâches stockées dans le localStorage.
+// Si aucune donnée n'existe encore, on utilise un tableau vide.
+let tasks = JSON.parse(localStorage.getItem("planAction")) || [];
+
+/* ---------------------------------------------------------
+   Fonction : save()
+   Sauvegarde toutes les tâches dans le localStorage
+--------------------------------------------------------- */
+function save() {
+  localStorage.setItem("planAction", JSON.stringify(tasks));
+}
+
+/* ---------------------------------------------------------
+   Fonction : render()
+   Affiche les tâches dans les 3 colonnes (À faire / En cours / Terminé)
+   et met à jour les compteurs.
+--------------------------------------------------------- */
+function render() {
+  // Les 3 statuts possibles
+  const statuses = ["todo", "doing", "done"];
+
+  // Compteurs pour chaque colonne
+  const counts = { todo: 0, doing: 0, done: 0 };
+
+  // Pour chaque statut, on remplit la colonne correspondante
+  statuses.forEach(status => {
+    const container = document.getElementById(status);
+    container.innerHTML = ""; // Vide la colonne avant de la remplir
+
+    // Filtre les tâches selon leur statut
+    tasks
+      .filter(t => t.status === status)
+      .forEach(t => {
+        counts[status]++; // Incrémente le compteur
+
+        // Création de l'élément visuel de la tâche
+        const div = document.createElement("div");
+        div.className = "task " + status; // Ajoute la classe CSS selon le statut
+        div.textContent = t.title; // Texte de la tâche
+
+        // Quand on clique sur la tâche → elle change de colonne
+        div.onclick = () => moveTask(t.id);
+
+        // Petit texte d'indication (ex : "→ En cours")
+        const info = document.createElement("small");
+        info.textContent =
+          status === "todo" ? "→ En cours" :
+          status === "doing" ? "→ Terminé" :
+          "→ Revenir à À faire";
+
+        div.appendChild(info);
+        container.appendChild(div);
+      });
+  });
+
+  // Mise à jour des compteurs affichés dans les titres
+  document.getElementById("count-todo").textContent =
+    counts.todo ? `(${counts.todo})` : "";
+  document.getElementById("count-doing").textContent =
+    counts.doing ? `(${counts.doing})` : "";
+  document.getElementById("count-done").textContent =
+    counts.done ? `(${counts.done})` : "";
+}
+
+/* ---------------------------------------------------------
+   Fonction : addTask()
+   Ajoute une nouvelle tâche dans la colonne "À faire"
+--------------------------------------------------------- */
+function addTask() {
+  const input = document.getElementById("taskInput");
+  const title = input.value.trim(); // Nettoie les espaces
+
+  if (!title) return; // Si vide → on ne fait rien
+
+  // Ajoute une nouvelle tâche avec un ID unique
+  tasks.push({ id: Date.now(), title, status: "todo" });
+
+  input.value = ""; // Vide le champ
+  save();           // Sauvegarde
+  render();         // Rafraîchit l'affichage
+}
+
+/* ---------------------------------------------------------
+   Fonction : moveTask(id)
+   Change le statut d'une tâche quand on clique dessus
+   todo → doing → done → todo
+--------------------------------------------------------- */
+function moveTask(id) {
+  const t = tasks.find(x => x.id === id); // Trouve la tâche
+  if (!t) return;
+
+  // Rotation des statuts
+  if (t.status === "todo") t.status = "doing";
+  else if (t.status === "doing") t.status = "done";
+  else t.status = "todo";
+
+  save();
+  render();
+}
+
+/* ---------------------------------------------------------
+   Événements : bouton Ajouter + touche Entrée
+--------------------------------------------------------- */
+document.getElementById("addBtn").onclick = addTask;
+
+document.getElementById("taskInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") addTask();
+});
+
+// Affiche les tâches au chargement de la page
+render();
+
+/* ---------------------------------------------------------
+   Bouton RESET GLOBAL
+   Efface toutes les données du site et recharge la page
+--------------------------------------------------------- */
+document.getElementById("reset-data").addEventListener("click", () => {
+  if (confirm("Voulez-vous vraiment tout réinitialiser ?")) {
+    localStorage.removeItem("planAction"); // Supprime toutes les données
+    location.reload();    // Recharge la page
+  }
+});
+
+
+/*PDF*/
+document.addEventListener("DOMContentLoaded", () => {
+
+  const pdfBtn = document.querySelector('button[onclick="window.print()"]');
+  pdfBtn.onclick = generatePDF;
+
+  function generatePDF() {
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    let y = 10;
+
+    // Titre principal
+    doc.setFontSize(18);
+    doc.text("Plan d’action", 10, y);
+    y += 12;
+
+    // Fonction pour créer un bloc avec bordure 1px + fond blanc
+    function block(title, items) {
+
+      // Titre
+      doc.setFontSize(14);
+      doc.setTextColor(37, 99, 235);
+      doc.text(title, 10, y);
+      y += 4;
+
+      // Ligne grise
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.3);
+      doc.line(10, y, 200, y);
+      y += 6;
+
+      // Tableau
+      const rows = items.length ? items.map(t => [t]) : [["(Aucune tâche)"]];
+
+      doc.autoTable({
+        startY: y,
+        head: [["Tâches"]],
+        body: rows,
+        styles: {
+          fontSize: 11,
+          cellPadding: 2,
+          lineWidth: 0.2,
+          lineColor: [16, 185, 129], // bordure verte 1px
+          fillColor: [255, 255, 255] // fond blanc
+        },
+        headStyles: {
+          fillColor: [120, 120, 120], // gris foncé #374151
+          textColor: [255, 255, 255], // texte blanc
+          halign: "center"
+        },
+        bodyStyles: {
+          halign: "left"
+        }
+      });
+
+      y = doc.lastAutoTable.finalY + 10;
+    }
+
+    // Récupération des tâches
+    const todo = tasks.filter(t => t.status === "todo").map(t => t.title);
+    const doing = tasks.filter(t => t.status === "doing").map(t => t.title);
+    const done = tasks.filter(t => t.status === "done").map(t => t.title);
+
+    // Blocs PDF
+    block("À faire", todo);
+    block("En cours", doing);
+    block("Terminé", done);
+
+    doc.save("plan_action1.pdf");
+  }
+});
+
+</script>
+</body>
+</html>
